@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { BrowserRouter, Switch } from "react-router-dom";
+import React, { useEffect, useState, useRef } from "react";
+import { BrowserRouter as Router, Switch, Route } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
-import { useRef } from "react";
 
 import LoggedInLayout from "../layout";
 import Dashboard from "../pages/Dashboard/";
@@ -21,10 +20,11 @@ import Helps from "../pages/Helps/";
 import ContactLists from "../pages/ContactLists/";
 import ContactListItems from "../pages/ContactListItems/";
 import { ForwardMessageProvider } from "../context/ForwarMessage/ForwardMessageContext";
+import QuickMessages from "../pages/QuickMessages/";
+import Kanban from "../pages/Kanban";
 import { AuthProvider } from "../context/Auth/AuthContext";
 import { TicketsContextProvider } from "../context/Tickets/TicketsContext";
 import { WhatsAppsProvider } from "../context/WhatsApp/WhatsAppsContext";
-import Route from "./Route";
 import Schedules from "../pages/Schedules";
 import Campaigns from "../pages/Campaigns";
 import CampaignsConfig from "../pages/CampaignsConfig";
@@ -37,34 +37,38 @@ import Files from "../pages/Files/";
 import Prompts from "../pages/Prompts";
 import QueueIntegration from "../pages/QueueIntegration";
 import LogLauncher from "../pages/LogLauncher";
-
-import ForgetPassword from "../pages/ForgetPassWord/"; // Reset PassWd
+import ForgetPassword from "../pages/ForgetPassWord/";
 
 const Routes = () => {
   const [showCampaigns, setShowCampaigns] = useState(false);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
   const iframeRef = useRef(null);
 
   useEffect(() => {
     // Verifica se está em um iframe
     if (window.self !== window.top) {
-      // Se estiver em um iframe, ajusta o tamanho automaticamente
+      // Ajusta o tamanho inicial
       const resizeIframe = () => {
         if (iframeRef.current) {
-          iframeRef.current.style.height = document.documentElement.scrollHeight + 'px';
+          const height = document.documentElement.scrollHeight;
+          iframeRef.current.style.height = `${height}px`;
+          // Informa ao pai o novo tamanho
+          window.parent.postMessage({
+            type: 'iframeResize',
+            height
+          }, '*');
         }
-        // Informa ao pai o novo tamanho
-        window.parent.postMessage({
-          type: 'iframeResize',
-          height: document.documentElement.scrollHeight
-        }, '*');
       };
 
-      window.addEventListener('resize', resizeIframe);
+      // Ajusta o tamanho inicial e adiciona listener de resize
       resizeIframe();
+      window.addEventListener('resize', resizeIframe);
 
       // Informa ao pai que o conteúdo foi carregado
       window.parent.postMessage({ type: 'iframeLoaded' }, '*');
+      setIframeLoaded(true);
 
+      // Limpa listeners quando o componente é desmontado
       return () => {
         window.removeEventListener('resize', resizeIframe);
       };
@@ -76,18 +80,12 @@ const Routes = () => {
     }
   }, []);
 
-  // Comunicação entre iframe e página pai
+  // Trata mensagens do pai
   useEffect(() => {
     const handleMessage = (event) => {
       if (event.data.type === 'iframeResize') {
-        // Ajusta o tamanho do iframe quando necessário
         if (iframeRef.current) {
-          iframeRef.current.style.height = event.data.height + 'px';
-        }
-      } else if (event.data.type === 'iframeLoaded') {
-        // Quando o iframe carrega, ajusta o tamanho
-        if (iframeRef.current) {
-          iframeRef.current.style.height = event.data.height + 'px';
+          iframeRef.current.style.height = `${event.data.height}px`;
         }
       }
     };
@@ -100,10 +98,37 @@ const Routes = () => {
   }, []);
 
   return (
-    <BrowserRouter>
-      <AuthProvider>
-	  <ForwardMessageProvider>
-        <TicketsContextProvider>
+    <div ref={iframeRef} style={{
+      height: iframeLoaded ? '100%' : '0',
+      transition: 'height 0.3s ease-in-out'
+    }}>
+      <Router>
+        <AuthProvider>
+          <ForwardMessageProvider>
+            <TicketsContextProvider>
+              <Switch>
+                <Route exact path="/login" component={Login} />
+                <Route exact path="/signup" component={Signup} />
+                <Route exact path="/forgetpsw" component={ForgetPassword} />
+                <LoggedInLayout>
+                  <Route exact path="/" component={Dashboard} isPrivate />
+                  <Route exact path="/tickets/:ticketId?" component={TicketResponsiveContainer} isPrivate />
+                  <Route exact path="/connections" component={Connections} isPrivate />
+                  <Route exact path="/quick-messages" component={QuickMessages} isPrivate />
+                  <Route exact path="/todolist" component={ToDoList} isPrivate />
+                  <Route exact path="/schedules" component={Schedules} isPrivate />
+                  <Route exact path="/tags" component={Tags} isPrivate />
+                  <Route exact path="/contacts" component={Contacts} isPrivate />
+                  <Route exact path="/helps" component={Helps} isPrivate />
+                </LoggedInLayout>
+              </Switch>
+            </TicketsContextProvider>
+          </ForwardMessageProvider>
+        </AuthProvider>
+      </Router>
+      <ToastContainer />
+    </div>
+  );
           <Switch>
             <Route exact path="/login" component={Login} />
             <Route exact path="/signup" component={Signup} />
